@@ -34,3 +34,4 @@ target
 .classpath
 .jython_cache
 qywx.json
+*.log
