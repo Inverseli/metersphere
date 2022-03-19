@@ -520,6 +520,10 @@ export default {
         this.isSave = false;
         this.removeTab(targetName);
       }
+      if (tab) {
+        tab.splice(0, 1);
+        tab = undefined;
+      }
       if (this.tabs && this.tabs.length === 0) {
         this.refreshAll();
       }
@@ -531,6 +535,10 @@ export default {
         this.addListener(); //  自动切换当前标签时，也添加监听
       } else {
         this.activeName = "default";
+      }
+      let index = this.tabs.findIndex(item => item.name === targetName);
+      if (index !== -1) {
+        this.tabs.splice(index, 1);
       }
     },
     setTabLabel(data) {

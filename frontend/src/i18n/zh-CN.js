@@ -1,7 +1,7 @@
 export default {
   commons: {
     project_permission: '请先添加该项目权限',
-    no_permission:'暂无权限',
+    no_permission: '暂无权限',
     failure_continues: "失败继续",
     full_screen_editing: "全屏编辑",
     trash: "回收站",
@@ -44,11 +44,13 @@ export default {
     confirm_delete: '是否删除',
     delete_cancelled: '已取消删除',
     workspace: '工作空间',
+    current_workspace:"当前工作空间",
     organization: '组织',
     setting: '设置',
     project: '项目',
     about_us: '关于',
     current_project: '当前项目',
+    not_exist:"不存在",
     name: '名称',
     description: '描述',
     annotation: '注释',
@@ -243,8 +245,9 @@ export default {
     follow_success: "关注成功",
     cancel_follow_success: "取消关注成功",
     type: "类型",
-    type_of_num:"请输入整数类型",
-    validity_period:'有效期',
+    type_of_integer: "请输入整数类型",
+    type_of_num: "请输入数字类型",
+    validity_period: '有效期',
     please_select_a_deadline: "请选择截止时间",
     relationship: {
       name: '依赖关系',
@@ -909,9 +912,10 @@ export default {
   report: {
     id: '报告ID',
     api_test_report: '接口测试报告',
+    scenario_test_report: '场景测试报告',
     load_test_report: '性能测试报告',
     test_plan_report: '测试计划报告',
-    report_sharing_link:'报告分享链接',
+    report_sharing_link: '报告分享链接',
     recent: '我最近的报告',
     search_by_name: '根据名称搜索',
     batch_add_monitor_tips: '格式：名称,IP,Port,描述<br/>如：项目1,192.168.1.52,9100,测试',
@@ -1158,14 +1162,14 @@ export default {
       rule: {
         input_code: "请输入 HTTP Code"
       },
-      range_type:{
+      range_type: {
         value_eq: "值-等于[value=]",
         value_not_eq: "值-不等于[value!=]",
-        value_contain:"值-包含[include=]",
+        value_contain: "值-包含[include=]",
         length_eq: "长度-等于[length=]",
         length_not_eq: "长度-不等于[length!=]",
-        length_large_than:"长度-大于[length>]",
-        length_shot_than:"长度-小于[length<]",
+        length_large_than: "长度-大于[length>]",
+        length_shot_than: "长度-小于[length<]",
         regular_match: "正则匹配",
       }
     },
@@ -1351,6 +1355,8 @@ export default {
       reference_info: "请选择接口或用例",
       scenario_test: "场景",
       scenario_list: "场景列表",
+      unplanned_scenario: '未规划场景',
+      all_scenario: '全部场景',
       add_scenario: "创建场景",
       scenario_name: "场景名称",
       case_level: "用例等级",
@@ -1938,6 +1944,7 @@ export default {
     date: "日期"
   },
   test_track: {
+    unplanned_case: '未规划用例',
     sync_add_api_load: '同步添加关联的接口和性能测试',
     next: '下一条',
     total_size: '共 {0} 条',
@@ -2229,6 +2236,7 @@ export default {
       add_module: "添加模块",
       name: "模块名称",
       delete_confirm: "确认删除模块: ",
+      delete_batch_confirm: "确认批量删除勾选的场景步骤？",
       delete_all_resource: "以及模块下所有子模块和测试用例",
       module: "模块",
       title: "标题",
@@ -2622,7 +2630,7 @@ export default {
   },
   variables: {
     cvs_info: "只能上传CSV文件",
-    csv_message: "默认展示2000条，完整的内容可点击下载查看。",
+    csv_message: "默认展示500条，完整的内容可点击下载查看。",
     end: "结束",
     start: "开始",
     increment: "增量",
@@ -3055,8 +3063,8 @@ export default {
       delete: "删除",
       read: "查看脚本",
     },
-    personal_information:{
-      name:'设置',
+    personal_information: {
+      name: '设置',
       personal_setting: '个人设置',
       api_keys: 'API Keys',
       edit_password: "修改密码",
@@ -3076,7 +3084,7 @@ export default {
   error_report_library: {
     name: "误报库",
     assertion: "误报断言",
-    tips:"注：在\"项目设置-设置环境-全局断言\"中启用误报将进行以下规则匹配",
+    tips: "注：在\"项目设置-设置环境-全局断言\"中启用误报将进行以下规则匹配",
     use_error_report: "启用误报",
     use_desc: "失败断言与误报规则冲突时统一处理为误报",
     option: {

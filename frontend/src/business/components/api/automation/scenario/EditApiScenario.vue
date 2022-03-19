@@ -161,15 +161,12 @@
               <!-- 场景步骤内容 -->
               <div ref="stepInfo">
                 <el-tree node-key="resourceId" :props="props" :data="scenarioDefinition" class="ms-tree"
-                         :default-expanded-keys="expandedNode"
                          :expand-on-click-node="false"
                          :allow-drop="allowDrop"
                          :empty-text="$t('api_test.scenario.step_info')"
                          highlight-current
                          :show-checkbox="isBatchProcess"
                          @check-change="chooseHeadsUp"
-                         @node-expand="nodeExpand"
-                         @node-collapse="nodeCollapse"
                          @node-drag-end="allowDrag" @node-click="nodeClick" draggable ref="stepTree">
 
                   <el-row class="custom-tree-node" :gutter="18" type="flex" align="middle" slot-scope="{node, data}" style="width: 100%">
@@ -191,7 +188,6 @@
                         :scenario="data"
                         :response="response"
                         :currentScenario="currentScenario"
-                        :expandedNode="expandedNode"
                         :currentEnvironmentId="currentEnvironmentId"
                         :node="node"
                         :project-list="projectList"
@@ -454,7 +450,6 @@ export default {
       operatingElements: [],
       selectedTreeNode: undefined,
       selectedNode: undefined,
-      expandedNode: [],
       scenarioDefinition: [],
       path: "/api/automation/create",
       debugData: {},
@@ -559,10 +554,10 @@ export default {
   mounted() {
     this.$nextTick(() => {
       this.addListener();
+      if (!this.currentScenario.name && this.$refs.refFab) {
+        this.$refs.refFab.openMenu();
+      }
     });
-    if (!this.currentScenario.name && this.$refs.refFab) {
-      this.$refs.refFab.openMenu();
-    }
   },
   directives: {OutsideClick},
   computed: {
@@ -581,30 +576,35 @@ export default {
     },
     checkedAll(v) {
       if (this.$refs.stepTree && this.$refs.stepTree.root && this.$refs.stepTree.root.childNodes) {
-        this.stepCheckedAll(v, this.$refs.stepTree.root.childNodes);
+        this.recursionChecked(v, this.$refs.stepTree.root.childNodes);
       }
     },
-    stepCheckedAll(v, array) {
+    recursionChecked(v, array) {
       if (array) {
         array.forEach(item => {
           if (item.childNodes && item.childNodes.length > 0) {
-            this.stepCheckedAll(v, item.childNodes);
+            this.recursionChecked(v, item.childNodes);
           }
           item.checked = v;
+          if (item.data && item.data.type === 'scenario' && item.data.referenced === 'REF') {
+            item.expanded = false;
+          }
         })
       }
     },
     batchProcessing() {
       this.isBatchProcess = true;
-      this.expandedNode = [];
       this.hideAllTreeNode(this.scenarioDefinition);
+      if (this.$refs.stepTree && this.$refs.stepTree.root && this.$refs.stepTree.root.childNodes) {
+        this.recursionExpansion([], this.$refs.stepTree.root.childNodes);
+      }
       this.reloadTreeStatus();
     },
     cancelBatchProcessing() {
       this.isBatchProcess = false;
       this.isCheckedAll = false;
       if (this.$refs.stepTree && this.$refs.stepTree.root && this.$refs.stepTree.root.childNodes) {
-        this.stepCheckedAll(false, this.$refs.stepTree.root.childNodes);
+        this.recursionChecked(false, this.$refs.stepTree.root.childNodes);
       }
       this.selectDataCounts = 0;
       this.commandTreeNode();
@@ -621,11 +621,6 @@ export default {
     },
     openOrClose(node) {
       node.expanded = !node.expanded;
-      if (node.expanded) {
-        this.nodeExpand(node.data);
-      } else {
-        this.nodeCollapse(node.data);
-      }
     },
     hideNode(node) {
       node.isLeaf = true;
@@ -633,12 +628,12 @@ export default {
     },
     hideAllTreeNode(array) {
       array.forEach(item => {
-        if (item.hashTree && item.hashTree.length > 0) {
-          this.hideAllTreeNode(item.hashTree);
-        }
         item.isLeaf = this.isBatchProcess;
         item.isBatchProcess = this.isBatchProcess;
         item.checkBox = this.isBatchProcess;
+        if (item.hashTree && item.hashTree.length > 0) {
+          this.hideAllTreeNode(item.hashTree);
+        }
       })
     },
     commandTreeNode(node, array) {
@@ -653,6 +648,8 @@ export default {
         }
         if (item.hashTree && item.hashTree.length > 0) {
           this.commandTreeNode(item, item.hashTree);
+        } else {
+          item.isLeaf = true;
         }
       })
       if (node) {
@@ -692,7 +689,9 @@ export default {
             let data = JSON.parse(res.data);
             if (data.hashTree) {
               this.sort(data.hashTree);
-              Object.assign(this.scenarioDefinition, data.hashTree)
+              let domainMap = new Map();
+              this.getEnvDomain(data.hashTree, domainMap);
+              this.margeDomain(this.scenarioDefinition, domainMap);
               this.cancelBatchProcessing();
               if (this.$store.state.currentApiCase) {
                 this.$store.state.currentApiCase.resetDataSource = getUUID();
@@ -703,6 +702,27 @@ export default {
           }
         })
       }
+    },
+    margeDomain(array, map) {
+      array.forEach(item => {
+        if (item && map.has(item.resourceId)) {
+          item.domain = map.get(item.resourceId);
+          item.resourceId = getUUID();
+        }
+        if (item && item.hashTree && item.hashTree.length > 0) {
+          this.margeDomain(item.hashTree, map);
+        }
+      })
+    },
+    getEnvDomain(array, map) {
+      array.forEach(item => {
+        if (item && item.resourceId && item.domain) {
+          map.set(item.resourceId, item.domain);
+        }
+        if (item && item.hashTree && item.hashTree.length > 0) {
+          this.getEnvDomain(item.hashTree, map);
+        }
+      })
     },
     initPlugins() {
       if (this.plugins) {
@@ -746,25 +766,25 @@ export default {
     },
     stop() {
       if (this.reportId) {
+        this.debugLoading = false;
+        try {
+          if (this.messageWebSocket) {
+            this.messageWebSocket.close();
+          }
+          if (this.websocket) {
+            this.websocket.close();
+          }
+          this.clearNodeStatus(this.$refs.stepTree.root.childNodes);
+          this.clearDebug();
+          this.$success(this.$t('report.test_stop_success'));
+        } catch (e) {
+          this.debugLoading = false;
+        }
+        this.runScenario = undefined;
+        // 停止jmeter执行
         let url = "/api/automation/stop/" + this.reportId;
         this.$get(url, response => {
-          this.debugLoading = false;
-          try {
-            if (this.websocket) {
-              this.websocket.close();
-            }
-            if (this.messageWebSocket) {
-              this.messageWebSocket.close();
-            }
-            this.clearNodeStatus(this.$refs.stepTree.root.childNodes);
-            this.clearDebug();
-            this.$success(this.$t('report.test_stop_success'));
-            this.forceRerender();
-          } catch (e) {
-            this.debugLoading = false;
-          }
         });
-        this.runScenario = undefined;
       }
     },
     clearDebug() {
@@ -1414,16 +1434,6 @@ export default {
         this.forceRerender();
       }
     },
-    nodeExpand(data, node) {
-      if (data && data.resourceId && this.expandedNode.indexOf(data.resourceId) === -1) {
-        this.expandedNode.push(data.resourceId);
-      }
-    },
-    nodeCollapse(data, node) {
-      if (data && data.resourceId) {
-        this.expandedNode.splice(this.expandedNode.indexOf(data.resourceId), 1);
-      }
-    },
     editScenario() {
       if (!document.getElementById("inputDelay")) {
         return;
@@ -1723,11 +1733,8 @@ export default {
     },
     changeNodeStatus(resourceIds, nodes) {
       for (let i in nodes) {
-        if (nodes[i]) {
+        if (nodes[i] && !(nodes[i].type === 'scenario' && nodes[i].referenced === 'REF')) {
           if (resourceIds.indexOf(nodes[i].resourceId) !== -1) {
-            if (this.expandedStatus) {
-              this.expandedNode.push(nodes[i].resourceId);
-            }
             nodes[i].active = this.expandedStatus;
             if (this.stepSize > 35 && this.expandedStatus) {
               nodes[i].active = false;
@@ -1749,18 +1756,33 @@ export default {
       }
       return selectValueArr;
     },
+    recursionExpansion(resourceIds, array) {
+      if (array) {
+        array.forEach(item => {
+          if (item.data && item.data.type === 'scenario' && item.data.referenced === 'REF') {
+            item.expanded = false;
+          } else {
+            if (resourceIds.indexOf(item.data.resourceId) !== -1) {
+              item.expanded = this.expandedStatus;
+            }
+          }
+          if (item.childNodes && item.childNodes.length > 0) {
+            this.recursionExpansion(resourceIds, item.childNodes);
+          }
+        })
+      }
+    },
     openExpansion() {
-      this.expandedNode = [];
       this.expandedStatus = true;
       let resourceIds = this.getAllResourceIds();
       this.changeNodeStatus(resourceIds, this.scenarioDefinition);
+      this.recursionExpansion(resourceIds, this.$refs.stepTree.root.childNodes);
     },
     closeExpansion() {
       this.expandedStatus = false;
-      this.expandedNode = [];
       let resourceIds = this.getAllResourceIds();
       this.changeNodeStatus(resourceIds, this.scenarioDefinition);
-      this.forceRerender();
+      this.recursionExpansion(resourceIds, this.$refs.stepTree.root.childNodes);
     },
     stepStatus(resourceIds, nodes) {
       for (let i in nodes) {
@@ -1785,11 +1807,18 @@ export default {
       this.stepStatus(resourceIds, this.scenarioDefinition);
     },
     handleDeleteBatch() {
-      this.getAllResourceIds().forEach(item => {
-        this.recursionDelete(item, this.scenarioDefinition);
+      this.$alert(this.$t('test_track.module.delete_batch_confirm'), '', {
+        confirmButtonText: this.$t('commons.confirm'),
+        callback: (action) => {
+          if (action === 'confirm') {
+            this.getAllResourceIds().forEach(item => {
+              this.recursionDelete(item, this.scenarioDefinition);
+            });
+            this.sort();
+            this.forceRerender();
+          }
+        }
       });
-      this.sort();
-      this.forceRerender();
     },
     recursionDelete(resourceId, nodes) {
       for (let i in nodes) {
@@ -1906,26 +1935,10 @@ export default {
   width: 100%;
 }
 
-.ms-main-div {
-  background-color: white;
-}
-
 .ms-debug-div {
   border: 1px #DCDFE6 solid;
   border-radius: 4px;
   margin-right: 0px;
-}
-
-.ms-scenario-button {
-  margin-left: 20px;
-  padding: 7px;
-}
-
-.ms-api-col {
-  background-color: #7C3985;
-  border-color: #7C3985;
-  margin-right: 10px;
-  color: white;
 }
 
 .ms-font {
@@ -1988,12 +2001,6 @@ export default {
   font-size: 13px;
 }
 
-.ms-opt-btn {
-  position: fixed;
-  right: 50px;
-  z-index: 9;
-}
-
 .ms-tree >>> .el-tree-node__expand-icon.expanded {
   -webkit-transform: rotate(0deg);
   transform: rotate(0deg);
@@ -2004,7 +2011,6 @@ export default {
 }
 
 .ms-tree >>> .el-icon-caret-right:before {
-  /*content: '\e723';*/
   padding: 0;
   content: "";
 }
@@ -2040,34 +2046,6 @@ export default {
   cursor: pointer;
 }
 
-.el-icon-more:hover {
-  color: #7C3985;
-  cursor: pointer;
-}
-
-.scenario-name {
-  display: inline-block;
-  margin: 0 5px;
-  overflow-x: hidden;
-  padding-bottom: 0;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-  white-space: nowrap;
-  width: 150px;
-}
-
-.ms-open-btn {
-  margin: 5px 5px 0px;
-  color: #6D317C;
-  font-size: 20px;
-}
-
-.ms-open-btn:hover {
-  background-color: #F2F9EE;
-  cursor: pointer;
-  color: #67C23A;
-}
-
 .ms-batch-btn {
   margin-left: 5px;
 }
@@ -2083,20 +2061,8 @@ export default {
   float: right;
 }
 
-.ms-open-btn-left {
-  margin-left: 35px;
-}
-
-
 .ms-message-right {
   margin-right: 10px;
-}
-
-.is-top {
-  position: fixed;
-  top: 125px;
-  background: white;
-  z-index: 999;
 }
 
 .custom-node_e {
@@ -2112,7 +2078,7 @@ export default {
 }
 
 .custom-tree-node-hide {
-  width: 2px;
+  width: 5px;
   padding: 0px;
   vertical-align: center;
 }

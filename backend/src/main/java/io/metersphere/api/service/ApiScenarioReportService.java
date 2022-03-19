@@ -24,6 +24,7 @@ import io.metersphere.log.vo.OperatingLogDetails;
 import io.metersphere.log.vo.api.ModuleReference;
 import io.metersphere.notice.sender.NoticeModel;
 import io.metersphere.notice.service.NoticeSendService;
+import io.metersphere.service.SystemParameterService;
 import io.metersphere.service.UserService;
 import io.metersphere.track.dto.PlanReportCaseDTO;
 import io.metersphere.utils.LoggerUtil;
@@ -76,9 +77,6 @@ public class ApiScenarioReportService {
     private ApiScenarioReportStructureMapper apiScenarioReportStructureMapper;
     @Resource
     private ApiDefinitionExecResultMapper definitionExecResultMapper;
-    @Resource
-    private ApiDefinitionScenarioRelevanceMapper apiDefinitionScenarioRelevanceMapper;
-
 
     public void saveResult(List<RequestResult> requestResults, ResultDTO dto) {
         // 报告详情内容
@@ -119,6 +117,16 @@ public class ApiScenarioReportService {
     }
 
     public APIScenarioReportResult get(String reportId) {
+        ApiDefinitionExecResult result = definitionExecResultMapper.selectByPrimaryKey(reportId);
+        if (result != null) {
+            APIScenarioReportResult reportResult = new APIScenarioReportResult();
+            BeanUtils.copyBean(reportResult, result);
+            reportResult.setReportVersion(2);
+            reportResult.setTestId(reportId);
+            ApiScenarioReportDTO dto = apiScenarioReportStructureService.apiIntegratedReport(reportId);
+            reportResult.setContent(JSON.toJSONString(dto));
+            return reportResult;
+        }
         APIScenarioReportResult reportResult = extApiScenarioReportMapper.get(reportId);
         if (reportResult != null) {
             if (reportResult.getReportVersion() != null && reportResult.getReportVersion() > 1) {
@@ -133,97 +141,18 @@ public class ApiScenarioReportService {
         return reportResult;
     }
 
-    public List<APIScenarioReportResult> list(int goPage,int pageSize,QueryAPIReportRequest request) {
+    public List<APIScenarioReportResult> list(QueryAPIReportRequest request) {
         request.setOrders(ServiceUtils.getDefaultOrder(request.getOrders()));
-        request.setGoPage((goPage - 1) * pageSize/2);
-        request.setPageSize(pageSize);
         List<APIScenarioReportResult> list = extApiScenarioReportMapper.list(request);
-        List<APIScenarioReportResult> collect = new ArrayList<>();
-        Comparator<APIScenarioReportResult> comparing = null;
-        if(request.getOrders().size()==0){
-            collect = list;
-        } else if(request.getOrders().size()==1){
-            String name = request.getOrders().get(0).getName();
-            String type = request.getOrders().get(0).getType();
-            if(StringUtils.equals(name,"name")){
-                comparing = Comparator.comparing(APIScenarioReportResult::getName);
-                if(StringUtils.equals(type,"DESC")){
-                   Comparator.comparing(APIScenarioReportResult::getName,Comparator.reverseOrder());
-                }
-                collect =  getApiScenarioReportResults(pageSize,list,comparing);
-            }
-            if(StringUtils.equals(name,"create_time")){
-                comparing =Comparator.comparing(APIScenarioReportResult::getCreateTime);
-                if(StringUtils.equals(type,"DESC")){
-                    comparing = Comparator.comparing(APIScenarioReportResult::getCreateTime,Comparator.reverseOrder());
-                }
-                collect =  getApiScenarioReportResults(pageSize,list,comparing);
-            }
-            if(StringUtils.equals(name,"update_time")){
-                if(StringUtils.equals(type,"DESC")){
-                    comparing = Comparator.comparing(APIScenarioReportResult::getUpdateTime,Comparator.reverseOrder());
-                }else {
-                    comparing =Comparator.comparing(APIScenarioReportResult::getUpdateTime);
-                }
-                collect =  getApiScenarioReportResults(pageSize,list,comparing);
-            }
-            if(StringUtils.equals(name,"end_time")){
-                comparing =Comparator.comparing(APIScenarioReportResult::getEndTime);
-                if(StringUtils.equals(type,"DESC")){
-                    comparing = Comparator.comparing(APIScenarioReportResult::getEndTime,Comparator.reverseOrder());
-                }
-                collect =  getApiScenarioReportResults(pageSize,list,comparing);
-            }
-        }else if(request.getOrders().size()>1){
-            for (int i = 1; i < request.getOrders().size(); i++) {
-                String name1 = request.getOrders().get(i).getName();
-                String type1 = request.getOrders().get(i).getType();
-                if(StringUtils.equals(name1,"name")){
-                    if(StringUtils.equals(type1,"DESC")){
-                        comparing.thenComparing(APIScenarioReportResult::getName,Comparator.reverseOrder());
-                    }else{
-                        comparing.thenComparing(APIScenarioReportResult::getName);
-                    }
-                }
-                if(StringUtils.equals(name1,"update_time")){
-                    if(StringUtils.equals(type1,"DESC")){
-                        comparing.thenComparing(APIScenarioReportResult::getUpdateTime,Comparator.reverseOrder());
-                    }else{
-                        comparing.thenComparing(APIScenarioReportResult::getUpdateTime);
-                    }
-                }
-                if(StringUtils.equals(name1,"create_time")){
-                    if(StringUtils.equals(type1,"DESC")){
-                        comparing.thenComparing(APIScenarioReportResult::getCreateTime,Comparator.reverseOrder());
-                    }else{
-                        comparing.thenComparing(APIScenarioReportResult::getCreateTime);
-                    }
-                }
-                if(StringUtils.equals(name1,"end_time")){
-                    if(StringUtils.equals(type1,"DESC")){
-                        comparing.thenComparing(APIScenarioReportResult::getEndTime,Comparator.reverseOrder());
-                    }else{
-                        comparing.thenComparing(APIScenarioReportResult::getEndTime);
-                    }
-                }
-            }
-           collect =  getApiScenarioReportResults(pageSize,list,comparing);
-        }
-
-        List<String> userIds = collect.stream().map(APIScenarioReportResult::getUserId)
+        List<String> userIds = list.stream().map(APIScenarioReportResult::getUserId)
                 .collect(Collectors.toList());
         Map<String, User> userMap = ServiceUtils.getUserMap(userIds);
-        collect.forEach(item -> {
+        list.forEach(item -> {
             User user = userMap.get(item.getUserId());
             if (user != null)
                 item.setUserName(user.getName());
         });
-
-        return collect;
-    }
-
-    private List<APIScenarioReportResult> getApiScenarioReportResults(int pageSize,List<APIScenarioReportResult> list, Comparator<APIScenarioReportResult> comparing) {
-        return list.stream().sorted(comparing).limit(pageSize/2).collect(Collectors.toList());
+        return list;
     }
 
     public List<String> idList(QueryAPIReportRequest request) {
@@ -263,9 +192,6 @@ public class ApiScenarioReportService {
             report.setTriggerMode(TriggerMode.MANUAL.name());
         }
         apiScenarioReportMapper.insert(report);
-        ApiDefinitionScenarioRelevance apiDefinitionScenarioRelevance = new ApiDefinitionScenarioRelevance();
-        apiDefinitionScenarioRelevance.setReportId(report.getId());
-        apiDefinitionScenarioRelevanceMapper.insert(apiDefinitionScenarioRelevance);
         return report;
     }
 
@@ -406,27 +332,28 @@ public class ApiScenarioReportService {
     }
 
     public void margeReport(String reportId, String runMode) {
-        ApiScenarioReport report = apiScenarioReportMapper.selectByPrimaryKey(reportId);
-        if (report != null) {
-            // 更新场景状态
-            if (StringUtils.equalsIgnoreCase(runMode, ApiRunMode.DEFINITION.name())) {
-                ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
-                execResultExample.createCriteria().andIntegratedReportIdEqualTo(reportId).andStatusEqualTo("Error");
-                long size = definitionExecResultMapper.countByExample(execResultExample);
-                report.setStatus(size > 0 ? ScenarioStatus.Error.name() : ScenarioStatus.Success.name());
-            } else {
+        // 更新场景状态
+        if (StringUtils.equalsIgnoreCase(runMode, ApiRunMode.DEFINITION.name())) {
+            ApiDefinitionExecResult result = definitionExecResultMapper.selectByPrimaryKey(reportId);
+            ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
+            execResultExample.createCriteria().andIntegratedReportIdEqualTo(reportId).andStatusEqualTo("Error");
+            long size = definitionExecResultMapper.countByExample(execResultExample);
+            result.setStatus(size > 0 ? ScenarioStatus.Error.name() : ScenarioStatus.Success.name());
+            definitionExecResultMapper.updateByPrimaryKeySelective(result);
+        } else {
+            ApiScenarioReport report = apiScenarioReportMapper.selectByPrimaryKey(reportId);
+            if (report != null) {
                 ApiScenarioReportResultExample example = new ApiScenarioReportResultExample();
                 example.createCriteria().andReportIdEqualTo(reportId).andStatusEqualTo(ScenarioStatus.Error.name());
                 long size = apiScenarioReportResultMapper.countByExample(example);
                 report.setStatus(size > 0 ? ScenarioStatus.Error.name() : ScenarioStatus.Success.name());
+                report.setEndTime(System.currentTimeMillis());
+                // 更新报告
+                apiScenarioReportMapper.updateByPrimaryKey(report);
             }
-            // 更新控制台信息
-            apiScenarioReportStructureService.update(reportId, FixedCapacityUtils.getJmeterLogger(reportId));
-
-            report.setEndTime(System.currentTimeMillis());
-            // 更新报告
-            apiScenarioReportMapper.updateByPrimaryKey(report);
         }
+        // 更新控制台信息
+        apiScenarioReportStructureService.update(reportId, FixedCapacityUtils.getJmeterLogger(reportId));
     }
 
     public ApiScenarioReport updateScenario(List<ApiScenarioReportResult> requestResults, ResultDTO dto) {
@@ -448,7 +375,12 @@ public class ApiScenarioReportService {
             }
 
             long successSize = requestResults.stream().filter(requestResult -> StringUtils.equalsIgnoreCase(requestResult.getStatus(), ScenarioStatus.Success.name())).count();
-            scenario.setPassRate(new DecimalFormat("0%").format((float) successSize / requestResults.size()));
+            if(requestResults.size() == 0){
+                scenario.setPassRate("0%");
+            }else {
+                scenario.setPassRate(new DecimalFormat("0%").format((float) successSize / requestResults.size()));
+            }
+
             scenario.setReportId(dto.getReportId());
             int executeTimes = 0;
             if (scenario.getExecuteTimes() != null) {
@@ -507,12 +439,15 @@ public class ApiScenarioReportService {
         }
         String userId = result.getCreateUser();
         UserDTO userDTO = userService.getUserDTO(userId);
-
+        SystemParameterService systemParameterService = CommonBeanFactory.getBean(SystemParameterService.class);
+        assert systemParameterService != null;
         Map paramMap = new HashMap<>(beanMap);
         paramMap.put("operator", userDTO.getName());
         paramMap.put("status", scenario.getLastResult());
         paramMap.put("environment", getEnvironment(scenario));
-
+        BaseSystemConfigDTO baseSystemConfigDTO = systemParameterService.getBaseInfo();
+        String reportUrl = baseSystemConfigDTO.getUrl() + "/#/api/automation/report/view/" + result.getId();
+        paramMap.put("reportUrl", reportUrl);
         String context = "${operator}执行接口自动化" + status + ": ${name}";
         NoticeModel noticeModel = NoticeModel.builder()
                 .operator(userId)
@@ -559,13 +494,6 @@ public class ApiScenarioReportService {
         apiScenarioReportDetailMapper.deleteByPrimaryKey(request.getId());
         ApiScenarioReportResultExample example = new ApiScenarioReportResultExample();
         example.createCriteria().andReportIdEqualTo(request.getId());
-        List<ApiScenarioReportResult> apiScenarioReportResults = apiScenarioReportResultMapper.selectByExample(example);
-        if(apiScenarioReportResults!=null&&apiScenarioReportResults.size()!=0){
-            List<String> reportIds = apiScenarioReportResults.stream().map(ApiScenarioReportResult::getId).collect(Collectors.toList());
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(reportIds);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-        }
         apiScenarioReportResultMapper.deleteByExample(example);
 
         ApiScenarioReportStructureExample structureExample = new ApiScenarioReportStructureExample();
@@ -574,18 +502,10 @@ public class ApiScenarioReportService {
 
         ApiDefinitionExecResultExample definitionExecResultExample = new ApiDefinitionExecResultExample();
         definitionExecResultExample.createCriteria().andIdEqualTo(request.getId());
-        apiDefinitionScenarioRelevanceMapper.deleteByPrimaryKey(request.getId());
         definitionExecResultMapper.deleteByExample(definitionExecResultExample);
 
         ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
         execResultExample.createCriteria().andIntegratedReportIdEqualTo(request.getId());
-        List<ApiDefinitionExecResult> apiDefinitionExecResults = definitionExecResultMapper.selectByExample(execResultExample);
-        if(apiDefinitionExecResults!=null&&apiDefinitionExecResults.size()!=0){
-            List<String> reportIds = apiDefinitionExecResults.stream().map(ApiDefinitionExecResult::getId).collect(Collectors.toList());
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(reportIds);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-        }
         definitionExecResultMapper.deleteByExample(execResultExample);
 
         // 补充逻辑，如果是集成报告则把零时报告全部删除
@@ -606,13 +526,6 @@ public class ApiScenarioReportService {
         apiScenarioReportMapper.deleteByPrimaryKey(id);
         ApiScenarioReportResultExample example = new ApiScenarioReportResultExample();
         example.createCriteria().andReportIdEqualTo(id);
-        List<ApiScenarioReportResult> apiScenarioReportResults = apiScenarioReportResultMapper.selectByExample(example);
-        if(apiScenarioReportResults!=null&&apiScenarioReportResults.size()!=0){
-            List<String> reportIds = apiScenarioReportResults.stream().map(ApiScenarioReportResult::getId).collect(Collectors.toList());
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(reportIds);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-        }
         apiScenarioReportResultMapper.deleteByExample(example);
 
         ApiScenarioReportStructureExample structureExample = new ApiScenarioReportStructureExample();
@@ -622,17 +535,9 @@ public class ApiScenarioReportService {
         ApiDefinitionExecResultExample definitionExecResultExample = new ApiDefinitionExecResultExample();
         definitionExecResultExample.createCriteria().andIdEqualTo(id);
         definitionExecResultMapper.deleteByExample(definitionExecResultExample);
-        apiDefinitionScenarioRelevanceMapper.deleteByPrimaryKey(id);
 
         ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
         execResultExample.createCriteria().andIntegratedReportIdEqualTo(id);
-        List<ApiDefinitionExecResult> apiDefinitionExecResults = definitionExecResultMapper.selectByExample(execResultExample);
-        if(apiDefinitionExecResults!=null&&apiDefinitionExecResults.size()!=0){
-            List<String> ids = apiDefinitionExecResults.stream().map(ApiDefinitionExecResult::getId).collect(Collectors.toList());
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(ids);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-        }
         definitionExecResultMapper.deleteByExample(execResultExample);
 
     }
@@ -648,13 +553,6 @@ public class ApiScenarioReportService {
 
             ApiScenarioReportResultExample reportResultExample = new ApiScenarioReportResultExample();
             reportResultExample.createCriteria().andReportIdIn(ids);
-            List<ApiScenarioReportResult> apiScenarioReportResults = apiScenarioReportResultMapper.selectByExample(reportResultExample);
-            if(apiScenarioReportResults!=null&&apiScenarioReportResults.size()!=0){
-                List<String> reportIds = apiScenarioReportResults.stream().map(ApiScenarioReportResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-                sexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-            }
             apiScenarioReportResultMapper.deleteByExample(reportResultExample);
 
             ApiScenarioReportStructureExample structureExample = new ApiScenarioReportStructureExample();
@@ -663,20 +561,10 @@ public class ApiScenarioReportService {
 
             ApiDefinitionExecResultExample definitionExecResultExample = new ApiDefinitionExecResultExample();
             definitionExecResultExample.createCriteria().andIdIn(ids);
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(ids);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
             definitionExecResultMapper.deleteByExample(definitionExecResultExample);
 
             ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
             execResultExample.createCriteria().andIntegratedReportIdIn(ids);
-            List<ApiDefinitionExecResult> apiDefinitionExecResultList = definitionExecResultMapper.selectByExample(execResultExample);
-            if(apiDefinitionExecResultList!=null&&apiDefinitionExecResultList.size()!=0){
-                List<String> reportIds = apiDefinitionExecResultList.stream().map(ApiDefinitionExecResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample asexample = new ApiDefinitionScenarioRelevanceExample();
-                asexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(asexample);
-            }
             definitionExecResultMapper.deleteByExample(execResultExample);
         }
     }
@@ -726,13 +614,6 @@ public class ApiScenarioReportService {
 
             ApiScenarioReportResultExample reportResultExample = new ApiScenarioReportResultExample();
             reportResultExample.createCriteria().andReportIdIn(handleIdList);
-            List<ApiScenarioReportResult> apiScenarioReportResults = apiScenarioReportResultMapper.selectByExample(reportResultExample);
-            if(apiScenarioReportResults!=null&&apiScenarioReportResults.size()!=0){
-                List<String> reportIds = apiScenarioReportResults.stream().map(ApiScenarioReportResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-                sexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-            }
             apiScenarioReportResultMapper.deleteByExample(reportResultExample);
 
             ApiScenarioReportStructureExample structureExample = new ApiScenarioReportStructureExample();
@@ -741,20 +622,10 @@ public class ApiScenarioReportService {
 
             ApiDefinitionExecResultExample definitionExecResultExample = new ApiDefinitionExecResultExample();
             definitionExecResultExample.createCriteria().andIdIn(handleIdList);
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(handleIdList);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
             definitionExecResultMapper.deleteByExample(definitionExecResultExample);
 
             ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
             execResultExample.createCriteria().andIntegratedReportIdIn(handleIdList);
-            List<ApiDefinitionExecResult> apiDefinitionExecResults = definitionExecResultMapper.selectByExample(execResultExample);
-            if(apiDefinitionExecResults!=null&&apiDefinitionExecResults.size()!=0){
-                List<String> reportIds = apiDefinitionExecResults.stream().map(ApiDefinitionExecResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample asexample = new ApiDefinitionScenarioRelevanceExample();
-                asexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(asexample);
-            }
             definitionExecResultMapper.deleteByExample(execResultExample);
 
             //转存剩余的数据
@@ -772,13 +643,6 @@ public class ApiScenarioReportService {
 
             ApiScenarioReportResultExample reportResultExample = new ApiScenarioReportResultExample();
             reportResultExample.createCriteria().andReportIdIn(ids);
-            List<ApiScenarioReportResult> apiScenarioReportResults = apiScenarioReportResultMapper.selectByExample(reportResultExample);
-            if(apiScenarioReportResults!=null&&apiScenarioReportResults.size()!=0){
-                List<String> reportIds = apiScenarioReportResults.stream().map(ApiScenarioReportResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-                sexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
-            }
             apiScenarioReportResultMapper.deleteByExample(reportResultExample);
 
             ApiScenarioReportStructureExample structureExample = new ApiScenarioReportStructureExample();
@@ -787,20 +651,10 @@ public class ApiScenarioReportService {
 
             ApiDefinitionExecResultExample definitionExecResultExample = new ApiDefinitionExecResultExample();
             definitionExecResultExample.createCriteria().andIdIn(ids);
-            ApiDefinitionScenarioRelevanceExample sexample = new ApiDefinitionScenarioRelevanceExample();
-            sexample.createCriteria().andReportIdIn(ids);
-            apiDefinitionScenarioRelevanceMapper.deleteByExample(sexample);
             definitionExecResultMapper.deleteByExample(definitionExecResultExample);
 
             ApiDefinitionExecResultExample execResultExample = new ApiDefinitionExecResultExample();
             execResultExample.createCriteria().andIntegratedReportIdIn(ids);
-            List<ApiDefinitionExecResult> apiDefinitionExecResults = definitionExecResultMapper.selectByExample(execResultExample);
-            if(apiDefinitionExecResults!=null&&apiDefinitionExecResults.size()!=0){
-                List<String> reportIds = apiDefinitionExecResults.stream().map(ApiDefinitionExecResult::getId).collect(Collectors.toList());
-                ApiDefinitionScenarioRelevanceExample asexample = new ApiDefinitionScenarioRelevanceExample();
-                asexample.createCriteria().andReportIdIn(reportIds);
-                apiDefinitionScenarioRelevanceMapper.deleteByExample(asexample);
-            }
             definitionExecResultMapper.deleteByExample(execResultExample);
         }
     }

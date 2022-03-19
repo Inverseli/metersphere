@@ -127,8 +127,6 @@ public class ApiDefinitionService {
     private ExtProjectVersionMapper extProjectVersionMapper;
     @Resource
     private ProjectApplicationService projectApplicationService;
-    @Resource
-    private ApiDefinitionScenarioRelevanceMapper apiDefinitionScenarioRelevanceMapper;
 
     private ThreadLocal<Long> currentApiOrder = new ThreadLocal<>();
     private ThreadLocal<Long> currentApiCaseOrder = new ThreadLocal<>();
@@ -309,8 +307,13 @@ public class ApiDefinitionService {
         if (StringUtils.equals(request.getProtocol(), "DUBBO")) {
             request.setMethod("dubbo://");
         }
+        if (StringUtils.isNotEmpty(request.getSourceId())) {
+            // 检查附件复制出附件
+            FileUtils.copyBodyFiles(request.getSourceId(), request.getId());
+        } else {
+            FileUtils.createBodyFiles(request.getRequest().getId(), bodyFiles);
+        }
         ApiDefinitionWithBLOBs returnModel = createTest(request);
-        FileUtils.createBodyFiles(request.getRequest().getId(), bodyFiles);
         return returnModel;
     }
 
@@ -348,8 +351,6 @@ public class ApiDefinitionService {
         apiDefinitions.forEach(api -> {
             apiTestCaseService.deleteTestCase(api.getId());
             deleteFileByTestId(api.getId());
-            ApiDefinitionExecResult result = extApiDefinitionExecResultMapper.selectMaxResultByResourceId(api.getId());
-            apiDefinitionScenarioRelevanceMapper.deleteByPrimaryKey(result.getId());
             extApiDefinitionExecResultMapper.deleteByResourceId(api.getId());
             apiDefinitionMapper.deleteByPrimaryKey(api.getId());
             esbApiParamService.deleteByResourceId(api.getId());
@@ -1056,10 +1057,6 @@ public class ApiDefinitionService {
             result.setProjectId(request.getProjectId());
             result.setTriggerMode(TriggerMode.MANUAL.name());
             apiDefinitionExecResultMapper.insert(result);
-            //生成关系数据
-            ApiDefinitionScenarioRelevance apiDefinitionScenarioRelevance = new ApiDefinitionScenarioRelevance();
-            apiDefinitionScenarioRelevance.setReportId(result.getId());
-            apiDefinitionScenarioRelevanceMapper.insert(apiDefinitionScenarioRelevance);
         }
         return apiExecuteService.debug(request, bodyFiles);
     }
@@ -1111,7 +1108,7 @@ public class ApiDefinitionService {
     private void setModule(ApiDefinitionWithBLOBs item) {
         if (item != null && StringUtils.isEmpty(item.getModuleId()) || "default-module".equals(item.getModuleId())) {
             ApiModuleExample example = new ApiModuleExample();
-            example.createCriteria().andProjectIdEqualTo(item.getProjectId()).andProtocolEqualTo(item.getProtocol()).andNameEqualTo("未规划接口");
+            example.createCriteria().andProjectIdEqualTo(item.getProjectId()).andProtocolEqualTo(item.getProtocol()).andNameEqualTo("UNPLANNED");
             List<ApiModule> modules = apiModuleMapper.selectByExample(example);
             if (CollectionUtils.isNotEmpty(modules)) {
                 item.setModuleId(modules.get(0).getId());
@@ -1181,7 +1178,7 @@ public class ApiDefinitionService {
                         .build();
                 noticeSendService.send(NoticeConstants.Mode.SCHEDULE, "", noticeModel);
             }
-        }catch (Exception e){
+        } catch (Exception e) {
             LogUtil.error(e);
             MSException.throwException(Translator.get("user_import_format_wrong"));
         }
@@ -1818,12 +1815,13 @@ public class ApiDefinitionService {
     public ApiDefinitionResult getById(String id) {
         ApiDefinitionRequest request = new ApiDefinitionRequest();
         request.setId(id);
-        List<ApiDefinitionResult> list = list(request);
+        List<ApiDefinitionResult> list = extApiDefinitionMapper.list(request);
         if (CollectionUtils.isNotEmpty(list)) {
             return list.get(0);
         }
         return null;
     }
+
 
     public long countEffectiveByProjectId(String projectId) {
         if (StringUtils.isEmpty(projectId)) {
@@ -1994,6 +1992,7 @@ public class ApiDefinitionService {
         try {
             for (int i = 0; i < apis.size(); i++) {
                 ApiDefinitionWithBLOBs api = apis.get(i);
+                String sourceId = api.getId();
                 api.setId(UUID.randomUUID().toString());
                 api.setName(ServiceUtils.getCopyName(api.getName()));
                 api.setModuleId(request.getModuleId());
@@ -2003,6 +2002,9 @@ public class ApiDefinitionService {
                 api.setCreateTime(System.currentTimeMillis());
                 api.setUpdateTime(System.currentTimeMillis());
                 api.setRefId(api.getId());
+                // 检查附件复制出附件
+                FileUtils.copyBodyFiles(sourceId, api.getId());
+
                 mapper.insert(api);
                 if (i % 50 == 0)
                     sqlSession.flushStatements();
@@ -2023,7 +2025,7 @@ public class ApiDefinitionService {
 
     public void initModulePathAndId(String projectId, ApiDefinitionWithBLOBs test) {
         ApiModuleExample example = new ApiModuleExample();
-        example.createCriteria().andProjectIdEqualTo(projectId).andProtocolEqualTo(test.getProtocol()).andNameEqualTo("未规划接口");
+        example.createCriteria().andProjectIdEqualTo(projectId).andProtocolEqualTo(test.getProtocol()).andNameEqualTo("UNPLANNED");
         List<ApiModule> modules = apiModuleMapper.selectByExample(example);
         if (CollectionUtils.isNotEmpty(modules)) {
             test.setModuleId(modules.get(0).getId());

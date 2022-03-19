@@ -21,6 +21,7 @@ BEGIN
     #遍历游标
     REPEAT
         #利用取到的值进行数据库的操作
+        DELETE FROM project_application WHERE project_id = projectId AND type = 'API_SHARE_REPORT_TIME';
         INSERT INTO project_application (project_id, type, type_value)
         VALUES (projectId, 'API_SHARE_REPORT_TIME', '24H');
         # 将游标中的值再赋值给变量，供下次循环使用
@@ -655,15 +656,47 @@ from user_group_permission
 where group_id = 'admin'
   and module_id = 'PROJECT_ERROR_REPORT_LIBRARY';
 
-CREATE TABLE IF NOT EXISTS `api_definition_scenario_relevance`
-(
-    `report_id` varchar(50) NOT NULL COMMENT 'ID',
-    PRIMARY KEY (`report_id`),
-    KEY `relevance_report_id_index` (`report_id`)
-    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_general_ci;
+ALTER TABLE api_definition_exec_result
+    ADD report_type varchar(100) DEFAULT 'API_INDEPENDENT' NOT NULL COMMENT '报告类型';
 
-ALTER TABLE `api_scenario_report` ADD INDEX update_time_index ( `update_time` );
+insert into api_definition_exec_result(id, name, resource_id, create_time, status, user_id, trigger_mode, start_time,
+                                       end_time, actuator, report_type, version_id, project_id)
+select id,
+       name,
+       id,
+       create_time,
+       status,
+       user_id,
+       trigger_mode,
+       create_time,
+       IF(end_time is null, update_time, end_time),
+       actuator,
+       report_type,
+       version_id,
+       project_id
+from api_scenario_report
+where execute_type = 'Saved'
+  and report_type = 'API_INTEGRATED'
+  and end_time is not null;
 
-ALTER TABLE `api_definition_exec_result` ADD INDEX update_time_index ( `create_time` );
 
-ALTER TABLE `api_definition_exec_result` ADD INDEX integrated_report_id_index ( `integrated_report_id` );
+delete
+from api_scenario_report
+where report_type = 'API_INTEGRATED';
+
+ALTER TABLE api_definition MODIFY COLUMN path varchar (1000);
+
+update api_scenario_module
+set name = 'UNPLANNED'
+where name = '未规划场景'
+  and `level` = 1;
+
+update api_module
+set name = 'UNPLANNED'
+where name = '未规划接口'
+  and `level` = 1;
+
+update test_case_node
+set name = 'UNPLANNED'
+where name = '未规划用例'
+  and `level` = 1;

@@ -51,7 +51,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class ElementUtil {
-
+    private static final String PRE = "PRE";
+    private static final String POST = "POST";
+    private static final String ASSERTIONS = "ASSERTIONS";
     private static final String BODY_FILE_DIR = FileUtils.BODY_FILE_DIR;
 
     public static Arguments addArguments(ParameterConfig config, String projectId, String name) {
@@ -76,7 +78,7 @@ public class ElementUtil {
         ApiTestEnvironmentService environmentService = CommonBeanFactory.getBean(ApiTestEnvironmentService.class);
         ApiTestEnvironmentWithBLOBs environment = environmentService.get(environmentId);
         if (environment != null && environment.getConfig() != null) {
-            if(StringUtils.isEmpty(projectId)){
+            if (StringUtils.isEmpty(projectId)) {
                 projectId = environment.getProjectId();
             }
             if (StringUtils.equals(environment.getName(), MockConfigStaticData.MOCK_EVN_NAME)) {
@@ -630,5 +632,62 @@ public class ElementUtil {
                 ((HashTree) groupHashTree).add(key, objects.get(key));
             }
         }
+    }
+
+    private static final List<String> preOperates = new ArrayList<String>() {{
+        this.add("JSR223PreProcessor");
+        this.add("JDBCPreProcessor");
+        this.add("ConstantTimer");
+    }};
+    private static final List<String> postOperates = new ArrayList<String>() {{
+        this.add("JSR223PostProcessor");
+        this.add("JDBCPostProcessor");
+        this.add("Extract");
+    }};
+
+    public static List<MsTestElement> order(List<MsTestElement> elements) {
+        List<MsTestElement> elementList = new LinkedList<>();
+        if (CollectionUtils.isNotEmpty(elements)) {
+            Map<String, List<MsTestElement>> groupMap = new LinkedHashMap<>();
+            elements.forEach(item -> {
+                if ("Assertions".equals(item.getType())) {
+                    if (groupMap.containsKey(ASSERTIONS)) {
+                        groupMap.get(ASSERTIONS).add(item);
+                    } else {
+                        groupMap.put(ASSERTIONS, new LinkedList<MsTestElement>() {{
+                            this.add(item);
+                        }});
+                    }
+                } else if (preOperates.contains(item.getType())) {
+                    if (groupMap.containsKey(PRE)) {
+                        groupMap.get(PRE).add(item);
+                    } else {
+                        groupMap.put(PRE, new LinkedList<MsTestElement>() {{
+                            this.add(item);
+                        }});
+                    }
+                } else if (postOperates.contains(item.getType())) {
+                    if (groupMap.containsKey(POST)) {
+                        groupMap.get(POST).add(item);
+                    } else {
+                        groupMap.put(POST, new LinkedList<MsTestElement>() {{
+                            this.add(item);
+                        }});
+                    }
+                } else {
+                    elementList.add(item);
+                }
+            });
+            if (CollectionUtils.isNotEmpty(groupMap.get(PRE))) {
+                elementList.addAll(groupMap.get(PRE).stream().sorted(Comparator.comparing(MsTestElement::getIndex)).collect(Collectors.toList()));
+            }
+            if (CollectionUtils.isNotEmpty(groupMap.get(POST))) {
+                elementList.addAll(groupMap.get(POST).stream().sorted(Comparator.comparing(MsTestElement::getIndex)).collect(Collectors.toList()));
+            }
+            if (CollectionUtils.isNotEmpty(groupMap.get(ASSERTIONS))) {
+                elementList.addAll(groupMap.get(ASSERTIONS).stream().sorted(Comparator.comparing(MsTestElement::getIndex)).collect(Collectors.toList()));
+            }
+        }
+        return elementList;
     }
 }

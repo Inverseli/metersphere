@@ -45,11 +45,13 @@ export default {
     delete_cancelled: 'Delete cancelled',
     option_cannot_spread_pages: 'This options not support spread pages.Do you want continue?',
     workspace: 'Workspace',
+    current_workspace:"Current Workspace",
     organization: 'Organization',
     setting: 'Setting',
     project: 'Project',
     about_us: 'About Us',
     current_project: 'Current Project',
+    not_exist:"Not exist",
     name: 'Name',
     description: 'Description',
     annotation: 'Annotation',
@@ -243,7 +245,8 @@ export default {
     cancel_follow_success: "Cancel Follow Success",
     generate_test_data: "Generate test data",
     type: "Type",
-    type_of_num: "Please enter an integer type",
+    type_of_num: "Please enter an number type",
+    type_of_integer: "Please enter an integer type",
     validity_period: 'Validity Period',
     please_select_a_deadline: "Please select a deadline",
     relationship: {
@@ -324,8 +327,8 @@ export default {
     },
     monitor: "Monitor",
     all_label: {
-      case: "all",
-      review: "all"
+      case: "All Case",
+      review: "All Review"
     },
     image: 'Image',
     tag: 'Tag',
@@ -905,6 +908,7 @@ export default {
   report: {
     id: 'Report ID',
     api_test_report: 'Api Test Report',
+    scenario_test_report: 'Scenario Test Report',
     load_test_report: 'Load Test Report',
     test_plan_report: 'Test Plan Report',
     report_sharing_link: 'Report Sharing Link',
@@ -1346,6 +1350,8 @@ export default {
       reference_info: "Reference info",
       scenario_test: "Scenario test",
       scenario_list: "Scenario List",
+      all_scenario: 'All Scenario',
+      unplanned_scenario: 'Unplanned Scenario',
       add_scenario: "Add scenario",
       scenario_name: "Scenario Name",
       case_level: "Case Level",
@@ -1933,6 +1939,7 @@ export default {
     date: "Date"
   },
   test_track: {
+    unplanned_case: 'Unplanned Case',
     sync_add_api_load: 'Synchronously add associated api and load tests',
     next: 'Next',
     total_size: 'Total {0}',
@@ -2225,6 +2232,7 @@ export default {
       name: "Name",
       delete_confirm: "Confirm delete module:",
       delete_all_resource: "and all submodules and test cases under the module",
+      delete_batch_confirm: "Steps to confirm batch deletion of selected scenarios？",
       module: "Module",
       title: "Title",
       describe: "Describe",
@@ -2619,7 +2627,7 @@ export default {
   },
   variables: {
     ƒ: "Only CSV files can be uploaded",
-    csv_message: "2000 items are displayed by default, and the complete content can be downloaded and viewed.",
+    csv_message: "500 items are displayed by default, and the complete content can be downloaded and viewed.",
     end: "end",
     start: "start",
     increment: "increment",

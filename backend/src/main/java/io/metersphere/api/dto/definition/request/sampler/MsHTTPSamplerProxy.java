@@ -190,6 +190,11 @@ public class MsHTTPSamplerProxy extends MsTestElement {
             List<KeyValue> bodyParams = this.body.getBodyParams(sampler, this.getId());
             if (StringUtils.isNotEmpty(this.body.getType()) && "Form Data".equals(this.body.getType())) {
                 sampler.setDoMultipart(true);
+                this.body.getKvs().forEach(files -> {
+                    if (StringUtils.isNotEmpty(files.getName()) && "file".equals(files.getType()) && CollectionUtils.isNotEmpty(files.getFiles())) {
+                        sampler.setDoBrowserCompatibleMultipart(true);
+                    }
+                });
             }
             if (CollectionUtils.isNotEmpty(bodyParams)) {
                 Arguments arguments = httpArguments(bodyParams);
@@ -250,6 +255,7 @@ public class MsHTTPSamplerProxy extends MsTestElement {
             }
         }
         if (CollectionUtils.isNotEmpty(hashTree)) {
+            hashTree = ElementUtil.order(hashTree);
             for (MsTestElement el : hashTree) {
                 if (el.getEnvironmentId() == null) {
                     if (this.getEnvironmentId() == null) {
@@ -628,7 +634,7 @@ public class MsHTTPSamplerProxy extends MsTestElement {
             });
         }
         try {
-            Pattern p = Pattern.compile("(\\{)([\\w]+)(\\})");
+            Pattern p = Pattern.compile("(\\{)([\\w-]+)(\\})");
             Matcher m = p.matcher(path);
             while (m.find()) {
                 String group = m.group(2);
@@ -678,22 +684,22 @@ public class MsHTTPSamplerProxy extends MsTestElement {
         list.stream().
                 filter(KeyValue::isValid).
                 filter(KeyValue::isEnable).forEach(keyValue -> {
-                            try {
-                                String value = StringUtils.isNotEmpty(keyValue.getValue()) && keyValue.getValue().startsWith("@") ? ScriptEngineUtils.buildFunctionCallString(keyValue.getValue()) : keyValue.getValue();
-                                HTTPArgument httpArgument = new HTTPArgument(keyValue.getName(), value);
-                                if (keyValue.getValue() == null) {
-                                    httpArgument.setValue("");
-                                }
-                                httpArgument.setAlwaysEncoded(keyValue.isUrlEncode());
-                                if (StringUtils.isNotBlank(keyValue.getContentType())) {
-                                    httpArgument.setContentType(keyValue.getContentType());
-                                }
-                                arguments.addArgument(httpArgument);
-                            } catch (Exception e) {
-
-                            }
+                    try {
+                        String value = StringUtils.isNotEmpty(keyValue.getValue()) && keyValue.getValue().startsWith("@") ? ScriptEngineUtils.buildFunctionCallString(keyValue.getValue()) : keyValue.getValue();
+                        HTTPArgument httpArgument = new HTTPArgument(keyValue.getName(), value);
+                        if (keyValue.getValue() == null) {
+                            httpArgument.setValue("");
                         }
-                );
+                        httpArgument.setAlwaysEncoded(keyValue.isUrlEncode());
+                        if (StringUtils.isNotBlank(keyValue.getContentType())) {
+                            httpArgument.setContentType(keyValue.getContentType());
+                        }
+                        arguments.addArgument(httpArgument);
+                    } catch (Exception e) {
+
+                    }
+                }
+        );
         return arguments;
     }
 

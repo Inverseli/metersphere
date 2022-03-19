@@ -1,5 +1,5 @@
 <template>
-  <div v-if="loaded">
+  <div>
     <p>
       <el-select v-model="preOperate" size="mini" class="ms-select-step" v-if="tabType === 'pre'">
         <el-option
@@ -18,7 +18,8 @@
           :value="item.id">
         </el-option>
       </el-select>
-      <el-button size="mini" @click="add" type="primary" v-if="tabType !== 'assertionsRule'">
+      <el-button size="mini" @click="add" type="primary" v-if="tabType !== 'assertionsRule'"
+                 :disabled="request.disabled">
         {{ $t('api_test.request.assertions.add') }}
       </el-button>
     </p>
@@ -37,6 +38,7 @@
              v-if="data.type==='JSR223PreProcessor'"
              @remove="remove"
              @copyRow="copyRow"
+             :protocol="protocol"
              :title="$t('api_test.definition.request.pre_script')"
              :jsr223-processor="data"
              color="#B8741A"
@@ -53,7 +55,8 @@
             color="#B8741A"
             background-color="#F9F1EA"/>
 
-           <ms-constant-timer :inner-step="true" :timer="data" :node="node" v-if="data.type ==='ConstantTimer'" @remove="remove"/>
+           <ms-constant-timer :inner-step="true" :timer="data" :node="node" v-if="data.type ==='ConstantTimer'"
+                              @remove="remove"/>
 
          </div>
         <div v-if="tabType ==='post'">
@@ -62,6 +65,7 @@
             v-if="data.type ==='JSR223PostProcessor'"
             @copyRow="copyRow"
             @remove="remove"
+            :protocol="protocol"
             :is-read-only="false"
             :title="$t('api_test.definition.request.post_script')"
             :jsr223-processor="data"
@@ -150,14 +154,10 @@ export default {
     },
     isShowEnable: Boolean,
     jsonPathList: Array,
+    protocol: String,
     isReadOnly: {
       type: Boolean,
       default: false
-    }
-  },
-  watch: {
-    'request.body.typeChange'() {
-      this.showHide();
     }
   },
   data() {
@@ -257,20 +257,22 @@ export default {
       return false;
     },
     filter() {
-      let vars = [];
-      if (this.tabType === 'pre') {
-        vars = ["JSR223PreProcessor", "JDBCPreProcessor", "ConstantTimer"];
-      } else if (this.tabType === 'post') {
-        vars = ["JSR223PostProcessor", "JDBCPostProcessor", "Extract"];
-      } else {
-        vars = ["Assertions"];
-      }
       this.$nextTick(() => {
-        if (this.$refs.generalSteps && this.$refs.generalSteps.filter) {
-          this.$refs.generalSteps.filter(vars);
+        let vars = [];
+        if (this.tabType === 'pre') {
+          vars = ["JSR223PreProcessor", "JDBCPreProcessor", "ConstantTimer"];
+        } else if (this.tabType === 'post') {
+          vars = ["JSR223PostProcessor", "JDBCPostProcessor", "Extract"];
+        } else {
+          vars = ["Assertions"];
         }
+        this.$nextTick(() => {
+          if (this.$refs.generalSteps && this.$refs.generalSteps.filter) {
+            this.$refs.generalSteps.filter(vars);
+          }
+        });
+        this.sort();
       });
-      this.sort();
     },
     addPre() {
       let jsr223PreProcessor = createComponent("JSR223PreProcessor");
@@ -345,8 +347,9 @@ export default {
     copyRow(row) {
       let obj = JSON.parse(JSON.stringify(row));
       obj.id = getUUID();
+      obj.resourceId = getUUID();
       const index = this.request.hashTree.findIndex(d => d.id === row.id);
-      if (index !==-1) {
+      if (index !== -1) {
         this.request.hashTree.splice(index, 0, obj);
       } else {
         this.request.hashTree.push(obj);
@@ -378,12 +381,6 @@ export default {
       this.isReloadData = true
       this.$nextTick(() => {
         this.isReloadData = false
-      })
-    },
-    showHide() {
-      this.loaded = false
-      this.$nextTick(() => {
-        this.loaded = true
       })
     },
     init() {
@@ -439,7 +436,18 @@ export default {
           if (line[1] === '必填' || line[1] === 'Required' || line[1] === 'true') {
             required = true;
           }
-          keyValues.push(new KeyValue({name: line[0], required: required, value: line[2], description: line[3], type: "text", valid: false, file: false, encode: true, enable: true, contentType: "text/plain"}));
+          keyValues.push(new KeyValue({
+            name: line[0],
+            required: required,
+            value: line[2],
+            description: line[3],
+            type: "text",
+            valid: false,
+            file: false,
+            encode: true,
+            enable: true,
+            contentType: "text/plain"
+          }));
         })
         keyValues.forEach(item => {
           switch (this.activeName) {
@@ -566,12 +574,8 @@ export default {
 }
 
 .ms-select-step {
-  margin-left: 15px;
+  margin-left: 10px;
   margin-right: 10px;
   width: 200px;
-}
-
-.ms-assertions-button {
-  margin-left: 18px;
 }
 </style>

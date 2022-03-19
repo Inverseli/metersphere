@@ -121,12 +121,20 @@
             #{id}
         </foreach>
     </select>
-
-    <select id="selectCountByRequest" resultType="java.lang.Long">
-        select
-        count(*)
+    <select id="list" resultType="io.metersphere.base.domain.ApiDefinitionExecResultExpand">
+        SELECT a_r.name AS test_name,
+        a_r.end_time,
+        a_r.user_id,
+        a_r.name,
+        a_r.id,
+        a_r.project_id,
+        a_r.create_time,
+        a_r.create_time as update_time,
+        a_r.status,
+        a_r.trigger_mode,
+        a_r.report_type,
+        'Saved' as execute_type
         from api_definition_exec_result a_r
-        FORCE INDEX(PRIMARY)
         where (a_r.integrated_report_id is null or a_r.integrated_report_id = 'null')
         <if test="request.combine != null">
             <include refid="listCombine">
@@ -160,6 +168,12 @@
                                 #{value}
                             </foreach>
                         </when>
+                        <when test="key=='report_type'">
+                            and a_r.report_type in
+                            <foreach collection="values" item="value" separator="," open="(" close=")">
+                                #{value}
+                            </foreach>
+                        </when>
                     </choose>
                 </if>
             </foreach>
@@ -171,6 +185,45 @@
             </foreach>
         </if>
     </select>
+
+    <sql id="listCombine">
+        <if test='${condition}.name != null and (${name} == null or ${name} == "")'>
+            and `name`
+            <include refid="condition">
+                <property name="object" value="${condition}.name"/>
+            </include>
+        </if>
+        <if test="${condition}.testName != null">
+            and `name`
+            <include refid="condition">
+                <property name="object" value="${condition}.testName"/>
+            </include>
+        </if>
+        <if test="${condition}.createTime != null">
+            and create_time
+            <include refid="condition">
+                <property name="object" value="${condition}.createTime"/>
+            </include>
+        </if>
+        <if test="${condition}.status != null">
+            and status
+            <include refid="condition">
+                <property name="object" value="${condition}.status"/>
+            </include>
+        </if>
+        <if test="${condition}.triggerMode != null">
+            and trigger_mode
+            <include refid="condition">
+                <property name="object" value="${condition}.triggerMode"/>
+            </include>
+        </if>
+        <if test="${condition}.creator != null">
+            and user_id
+            <include refid="condition">
+                <property name="object" value="${condition}.creator"/>
+            </include>
+        </if>
+    </sql>
 
     <sql id="condition">
         <choose>
@@ -214,45 +267,6 @@
                 = #{${object}.value}
             </otherwise>
         </choose>
-    </sql>
-
-    <sql id="listCombine">
-        <if test='${condition}.name != null and (${name} == null or ${name} == "")'>
-            and `name`
-            <include refid="condition">
-                <property name="object" value="${condition}.name"/>
-            </include>
-        </if>
-        <if test="${condition}.testName != null">
-            and `name`
-            <include refid="condition">
-                <property name="object" value="${condition}.testName"/>
-            </include>
-        </if>
-        <if test="${condition}.createTime != null">
-            and create_time
-            <include refid="condition">
-                <property name="object" value="${condition}.createTime"/>
-            </include>
-        </if>
-        <if test="${condition}.status != null">
-            and status
-            <include refid="condition">
-                <property name="object" value="${condition}.status"/>
-            </include>
-        </if>
-        <if test="${condition}.triggerMode != null">
-            and trigger_mode
-            <include refid="condition">
-                <property name="object" value="${condition}.triggerMode"/>
-            </include>
-        </if>
-        <if test="${condition}.creator != null">
-            and user_id
-            <include refid="condition">
-                <property name="object" value="${condition}.creator"/>
-            </include>
-        </if>
     </sql>
 
     <update id="update" parameterType="java.util.List">

@@ -2,8 +2,6 @@ package io.metersphere.api.exec.api;
 
 import com.alibaba.fastjson.JSON;
 import io.metersphere.api.dto.ApiCaseRunRequest;
-import io.metersphere.api.dto.automation.APIScenarioReportResult;
-import io.metersphere.api.dto.automation.ExecuteType;
 import io.metersphere.api.dto.definition.ApiTestCaseRequest;
 import io.metersphere.api.dto.definition.BatchRunDefinitionRequest;
 import io.metersphere.api.dto.scenario.DatabaseConfig;
@@ -13,9 +11,15 @@ import io.metersphere.api.exec.scenario.ApiScenarioSerialService;
 import io.metersphere.api.exec.utils.ApiDefinitionExecResultUtil;
 import io.metersphere.api.service.*;
 import io.metersphere.base.domain.*;
-import io.metersphere.base.mapper.*;
+import io.metersphere.base.mapper.ApiScenarioReportMapper;
+import io.metersphere.base.mapper.ApiTestCaseMapper;
+import io.metersphere.base.mapper.TestPlanApiCaseMapper;
+import io.metersphere.base.mapper.TestPlanMapper;
 import io.metersphere.base.mapper.ext.ExtApiTestCaseMapper;
-import io.metersphere.commons.constants.*;
+import io.metersphere.commons.constants.APITestStatus;
+import io.metersphere.commons.constants.ApiRunMode;
+import io.metersphere.commons.constants.ReportTypeConstants;
+import io.metersphere.commons.constants.TriggerMode;
 import io.metersphere.commons.exception.MSException;
 import io.metersphere.commons.utils.CommonBeanFactory;
 import io.metersphere.commons.utils.ServiceUtils;
@@ -26,6 +30,7 @@ import io.metersphere.service.EnvironmentGroupProjectService;
 import io.metersphere.utils.LoggerUtil;
 import org.apache.commons.beanutils.BeanComparator;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.collections4.comparators.FixedOrderComparator;
 import org.apache.commons.lang3.StringUtils;
 import org.json.JSONObject;
@@ -58,8 +63,6 @@ public class ApiCaseExecuteService {
     private ApiScenarioReportMapper apiScenarioReportMapper;
     @Resource
     ApiScenarioReportStructureService apiScenarioReportStructureService;
-    @Resource
-    private ApiDefinitionScenarioRelevanceMapper apiDefinitionScenarioRelevanceMapper;
 
     /**
      * 测试计划case执行
@@ -137,23 +140,19 @@ public class ApiCaseExecuteService {
         if (CollectionUtils.isNotEmpty(caseList)) {
             StringBuilder builderHttp = new StringBuilder();
             StringBuilder builderTcp = new StringBuilder();
-            for (ApiTestCaseWithBLOBs apiCase : caseList) {
+            for (int i = caseList.size() - 1; i >= 0; i--) {
+                ApiTestCaseWithBLOBs apiCase = caseList.get(i);
                 JSONObject apiCaseNew = new JSONObject(apiCase.getRequest());
-                if ("HTTPSamplerProxy".equals(apiCaseNew.getString("type"))) {
-                    try {
-                        String environmentId = apiCaseNew.getString("useEnvironment");
-                        if (!StringUtils.isNotEmpty(environmentId)) {
-                            builderHttp.append(apiCase.getName()).append("; ");
-                        }
-                    } catch (Exception e) {
-                        MSException.throwException("用例：" + builderHttp.append(apiCase.getName()).append("; ") + "运行环境为空！请检查");
+                if (apiCaseNew.has("type") && "HTTPSamplerProxy".equals(apiCaseNew.getString("type"))) {
+                    if (!apiCaseNew.has("useEnvironment") || StringUtils.isEmpty(apiCaseNew.getString("useEnvironment"))) {
+                        builderHttp.append(apiCase.getName()).append("; ");
                     }
                 }
-                if ("JDBCSampler".equals(apiCaseNew.getString("type"))) {
-                    try {
+                if (apiCaseNew.has("type") && "JDBCSampler".equals(apiCaseNew.getString("type"))) {
+                    DatabaseConfig dataSource = null;
+                    if (apiCaseNew.has("useEnvironment") && apiCaseNew.has("dataSourceId")) {
                         String environmentId = apiCaseNew.getString("useEnvironment");
                         String dataSourceId = apiCaseNew.getString("dataSourceId");
-                        DatabaseConfig dataSource = null;
                         ApiTestEnvironmentService environmentService = CommonBeanFactory.getBean(ApiTestEnvironmentService.class);
                         ApiTestEnvironmentWithBLOBs environment = environmentService.get(environmentId);
                         EnvironmentConfig envConfig = null;
@@ -167,17 +166,20 @@ public class ApiCaseExecuteService {
                                 }
                             }
                         }
-                        if (dataSource == null) {
-                            MSException.throwException("用例：" + builderTcp.append(apiCase.getName()).append("; "));
-                        }
-                    } catch (Exception e) {
-                        MSException.throwException("用例数据源为空，请检查!");
+                    }
+                    if (dataSource == null) {
+                        builderTcp.append(apiCase.getName()).append("; ");
                     }
                 }
             }
+            if (StringUtils.isNotEmpty(builderHttp)) {
+                MSException.throwException("用例：" + builderHttp + "运行环境为空！请检查");
+            }
+            if (StringUtils.isNotEmpty(builderTcp)) {
+                MSException.throwException("用例：" + builderTcp + "数据源为空！请检查");
+            }
         }
     }
-
     /**
      * 接口定义case执行
      *
@@ -204,28 +206,24 @@ public class ApiCaseExecuteService {
         List<ApiTestCaseWithBLOBs> caseList = apiTestCaseMapper.selectByExampleWithBLOBs(example);
         LoggerUtil.debug("查询到执行数据：" + caseList.size());
         // 环境检查
-        this.checkEnv(caseList);
+        if (MapUtils.isEmpty(request.getConfig().getEnvMap())) {
+            this.checkEnv(caseList);
+        }
         // 集合报告设置
         String serialReportId = null;
         if (StringUtils.equals(request.getConfig().getReportType(), RunModeConstants.SET_REPORT.toString())
                 && StringUtils.isNotEmpty(request.getConfig().getReportName())) {
             serialReportId = UUID.randomUUID().toString();
-            APIScenarioReportResult report = apiScenarioReportService.init(request.getConfig().getReportId(), null, request.getConfig().getReportName(),
-                    ReportTriggerMode.BATCH.name(), ExecuteType.Saved.name(), request.getProjectId(),
-                    null, request.getConfig());
-            report.setVersionId(caseList.get(0).getVersionId());
+            ApiDefinitionExecResult report = ApiDefinitionExecResultUtil.initBase(null, APITestStatus.Running.name(), serialReportId, request.getConfig());
             report.setName(request.getConfig().getReportName());
-            report.setTestName(request.getConfig().getReportName());
-            report.setId(serialReportId);
+            report.setProjectId(request.getProjectId());
             report.setReportType(ReportTypeConstants.API_INTEGRATED.name());
-            request.getConfig().setAmassReport(serialReportId);
-            report.setStatus(APITestStatus.Running.name());
-            apiScenarioReportMapper.insert(report);
-            //生成关系数据
-            ApiDefinitionScenarioRelevance apiDefinitionScenarioRelevance = new ApiDefinitionScenarioRelevance();
-            apiDefinitionScenarioRelevance.setReportId(report.getId());
-            apiDefinitionScenarioRelevanceMapper.insert(apiDefinitionScenarioRelevance);
+            report.setVersionId(caseList.get(0).getVersionId());
+            Map<String, ApiDefinitionExecResult> executeQueue = new LinkedHashMap<>();
+            executeQueue.put(serialReportId, report);
+
             apiScenarioReportStructureService.save(serialReportId, new ArrayList<>());
+            apiCaseResultService.batchSave(executeQueue);
         }
 
         if (request.getConfig() != null && request.getConfig().getMode().equals(RunModeConstants.SERIAL.toString())) {

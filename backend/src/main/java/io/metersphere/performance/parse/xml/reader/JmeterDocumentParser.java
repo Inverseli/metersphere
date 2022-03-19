@@ -236,13 +236,17 @@ public class JmeterDocumentParser implements EngineSourceParser {
     }
 
     private void splitCsvFile(Node item) {
+        String filename = item.getText();
+        // 已经分割过的不再二次分割
+        if (BooleanUtils.toBoolean(context.getSplitFlag().get(filename))) {
+            return;
+        }
         Object csvConfig = context.getProperty("csvConfig");
         if (csvConfig == null) {
             return;
         }
         double[] ratios = context.getRatios();
         int resourceIndex = context.getResourceIndex();
-        String filename = item.getText();
         byte[] content = context.getTestResourceFiles().get(filename);
         if (content == null) {
             return;
@@ -283,7 +287,7 @@ public class JmeterDocumentParser implements EngineSourceParser {
                 String line = tokenizer.nextToken();
                 csv.append(line).append("\n");
             } else {
-                if (index < offset) {
+                if (index <= offset) {
                     tokenizer.nextToken();
                     index++;
                     continue;
@@ -298,6 +302,7 @@ public class JmeterDocumentParser implements EngineSourceParser {
         }
         // 替换文件
         context.getTestResourceFiles().put(filename, csv.toString().getBytes(StandardCharsets.UTF_8));
+        context.getSplitFlag().put(filename, true);
     }
 
     private void processResponseAssertion(Element element) {
