@@ -18,6 +18,7 @@ module.exports = {
       },
     }
   },
+  lintOnSave: false,
   pages: {
     business: {
       entry: "src/business/main.js",
